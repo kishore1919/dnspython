@@ -224,4 +224,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print("--- DNS Python script starting ---")
     main()

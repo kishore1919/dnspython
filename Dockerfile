@@ -1,32 +1,33 @@
-# Multi-stage build: builder stage for dependencies, final stage for runtime
-FROM python:3.11-slim AS builder
+# Stage 1: Build stage
+# Use a specific Python version. pyproject.toml requires >=3.13, but 3.13 is not stable yet.
+# Using Python 3.12.
+FROM python:3.12-slim as builder
 
-ENV PYTHONUNBUFFERED=1
+# Set the working directory
 WORKDIR /app
 
-# Install uv
+# Install build dependencies if any (e.g., for packages that need compilation)
+# RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+# Copy dependency files
+COPY pyproject.toml requirements.txt ./
+
+# Install uv, a fast Python package installer
 RUN pip install uv
 
-# Copy dependency files first for better caching
-COPY pyproject.toml uv.lock* requirements.txt* /app/
+# Install dependencies using uv
+RUN uv pip install --system --no-cache -r requirements.txt
 
-# Sync dependencies into a virtual environment
-RUN uv sync --no-install-project
+# Stage 2: Final stage
+FROM python:3.12-slim
 
-# Final stage: slim runtime image
-FROM python:3.11-slim
-
-ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Copy the virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy installed dependencies from the builder stage
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 
-# Copy repository into container (excluding venv via .dockerignore)
-COPY . /app
+# Copy the application code
+COPY . .
 
-# Activate venv and set PATH
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Default command — override in docker-compose or on docker run
+# Command to run the application, as mentioned in README.md
 CMD ["python", "main.py"]
