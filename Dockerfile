@@ -29,4 +29,4 @@ COPY . /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Default command — override in docker-compose or on docker run
-CMD ["bash"]
+CMD ["python", "main.py"]

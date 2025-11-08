@@ -1,6 +1,59 @@
-# DNS Utility Server
+# dnspython
 
-A simple DNS server that provides various utility functions.
+A Python library for DNS operations.
+
+## Installation
+
+Install the library and dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Testing on Windows
+
+To run tests on Windows using Command Prompt or PowerShell:
+
+1. Ensure Python and pip are installed.
+
+2. Install test dependencies (if not already in requirements.txt):
+   ```
+   pip install pytest
+   ```
+
+3. Run the tests:
+   ```
+   python -m pytest
+   ```
+
+For Docker-based testing (using the provided Dockerfile):
+
+1. Build the image:
+   ```
+   docker build -t dnspython .
+   ```
+
+2. Run tests inside the container:
+   ```
+   docker run --rm dnspython python -m pytest
+   ```
+
+Note: Adjust paths and commands as needed for your environment.
+
+## Troubleshooting
+
+### nslookup Fails with "No response from server"
+
+If running `nslookup -type=A -port=20000 ip localhost` on Windows results in "UnKnown can't find ip: No response from server":
+
+- **Ensure the server is running**: Confirm `python main.py` is executed and the server is listening on port 20000. Check for any error messages in the console.
+- **Check network interface**: `localhost` resolves to `::1` (IPv6) by default on some systems. Try using `127.0.0.1` (IPv4) instead: `nslookup -type=A -port=20000 ip 127.0.0.1`.
+- **Firewall or port issues**: Ensure port 20000 is not blocked by Windows Firewall or antivirus. Temporarily disable them for testing.
+- **IPv6 compatibility**: If the server only listens on IPv4, force IPv4 in nslookup: `nslookup -type=A -port=20000 ip 127.0.0.1`.
+- **Use dig instead**: As an alternative, install dig (e.g., via BIND tools) and use `dig @127.0.0.1 -p 20000 ip A` for more reliable results.
+- **Server logs**: Add logging to `main.py` to verify queries are received.
+
+If issues persist, check the server code for binding to the correct address (e.g., `0.0.0.0` for all interfaces).
 
 ## Features
 

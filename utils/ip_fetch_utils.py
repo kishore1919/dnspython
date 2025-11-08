@@ -1,5 +1,4 @@
 import requests
-import time
 from .ip_utils import is_valid_ipv4, is_valid_ipv6
 
 
