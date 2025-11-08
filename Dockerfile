@@ -13,7 +13,6 @@ COPY pyproject.toml uv.lock* requirements.txt* /app/
 # Sync dependencies into a virtual environment
 RUN uv sync --no-install-project
 
-RUN uv pip install requests==2.28.0
 # Final stage: slim runtime image
 FROM python:3.11-slim
 
