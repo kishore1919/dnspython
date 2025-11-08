@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  dnspython:
+    build: .
+    container_name: dnspython_dev
+    volumes:
+      - .:/app:delegated
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: bash
