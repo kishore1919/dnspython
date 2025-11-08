@@ -1,5 +1,5 @@
 # Add your Python dependencies here, one per line (e.g., requests==2.28.0)
 dnspython
 dnslib
-requests
 ipaddress
+requests
