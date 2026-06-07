@@ -1,5 +1,8 @@
+import logging
 import requests
 from .ip_utils import is_valid_ipv4, is_valid_ipv6
+
+logger = logging.getLogger("dnspython.ip_fetch")
 
 
 def fetch_ipv4() -> str:
@@ -16,13 +19,13 @@ def fetch_ipv4() -> str:
             response = requests.get(service, timeout=5)
             ip = response.text.strip()
             if is_valid_ipv4(ip):
-                print(f"IPv4 fetched from {service}: {ip}")
+                logger.info("IPv4 fetched from %s: %s", service, ip)
                 return ip
         except Exception as e:
-            print(f"Failed to fetch IPv4 from {service}: {e}")
+            logger.warning("Failed to fetch IPv4 from %s: %s", service, e)
             continue
     
-    print("Using IPv4 fallback: 127.0.0.1")
+    logger.warning("Using IPv4 fallback: 127.0.0.1")
     return "127.0.0.1"  # Fallback
 
 
@@ -38,11 +41,11 @@ def fetch_ipv6() -> str:
             response = requests.get(service, timeout=5)
             ip = response.text.strip()
             if is_valid_ipv6(ip):
-                print(f"IPv6 fetched from {service}: {ip}")
+                logger.info("IPv6 fetched from %s: %s", service, ip)
                 return ip
         except Exception as e:
-            print(f"Failed to fetch IPv6 from {service}: {e}")
+            logger.warning("Failed to fetch IPv6 from %s: %s", service, e)
             continue
     
-    print("Using IPv6 fallback: ::1")
+    logger.warning("Using IPv6 fallback: ::1")
     return "::1"  # Fallback

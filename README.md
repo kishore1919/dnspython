@@ -124,26 +124,41 @@ dnspython/
 ## Development
 
 ### Running Tests
+Run the comprehensive unit test suite using python or uv:
 ```bash
-# Test CIDR calculations
-python -c "from utils.cidr_utils import calculate_usable_ips; print(calculate_usable_ips(24))"
+# Run tests using uv
+uv run python -m unittest tests/test_resolver.py
 
-# Test Base64 encoding
-python -c "from utils.base64_utils import encode_base64; print(encode_base64('test'))"
+# Or using standard python
+python -m unittest tests/test_resolver.py
 ```
 
 ### Adding New Features
-1. Add new utility functions in the appropriate `utils/` module
-2. Update the `Resolver.resolve()` method in `main.py` to handle new query patterns
-3. Add corresponding response builder methods
-4. Update this README with new query examples
+1. Add new utility functions in the appropriate `utils/` module if needed.
+2. In `Resolver` in `main.py`:
+   - Implement a matcher method `_match_<feature>(self, ctx: QueryContext) -> Optional[Dict[str, Any]]` that matches the query domain patterns and returns a dictionary of extracted parameters.
+   - Implement a response builder method `_reply_<feature>(self, ctx: QueryContext, **kwargs) -> DNSRecord`.
+   - Register the rule in the `self.rules` list in `Resolver.__init__` using the `Rule` tuple:
+     ```python
+     Rule("Feature Name", self._match_<feature>, self._reply_<feature>)
+     ```
+3. Add tests in `tests/test_resolver.py` to cover the new logic.
+4. Update this README with new query examples.
 
 ## Configuration
 
-### Port Configuration
-The server runs on port 20000 by default. To change this:
-1. Modify the port in `main.py`
-2. Update the Dockerfile if using containerized deployment
+### Server Configuration
+The server binds to `127.0.0.1:20000` by default. You can configure this using environment variables:
+- `DNS_PORT`: Port to listen on (default: `20000`)
+- `DNS_ADDRESS`: Address to bind to (default: `127.0.0.1`)
+
+For example, to run on a different port:
+```bash
+# Windows PowerShell
+$env:DNS_PORT="30000"
+$env:DNS_ADDRESS="0.0.0.0"
+python main.py
+```
 
 ### IP Fetch Services
 The server uses multiple public IP fetch services with fallback:
@@ -153,12 +168,12 @@ The server uses multiple public IP fetch services with fallback:
 ## Troubleshooting
 
 ### Common Issues
-- **Port already in use**: Change the port in `main.py` or stop the conflicting service
-- **DNS queries not working**: Ensure the server is running and check firewall settings
-- **IP fetch failures**: The server will fall back to localhost addresses
+- **Port already in use**: Change the `DNS_PORT` environment variable or stop the conflicting service.
+- **DNS queries not working**: Ensure the server is running and check firewall/network settings.
+- **IP fetch failures**: The server will log a warning and fall back to localhost loopback addresses.
 
 ### Debugging
-The server logs all queries and their responses to the console for debugging purposes.
+The server uses structured logging to log all queries and execution traces. You can set the logging level or view the formatted stdout/stderr console logs.
 
 ## License
 This project is open source and available for modification and distribution.
