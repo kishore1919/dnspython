@@ -1,51 +1,53 @@
 import logging
+from typing import Callable
+
 import requests
+
 from .ip_utils import is_valid_ipv4, is_valid_ipv6
 
 logger = logging.getLogger("dnspython.ip_fetch")
 
 
-def fetch_ipv4() -> str:
-    """Fetch public IPv4 address."""
-    services = [
-        "https://ipv4.icanhazip.com",
-        "https://api.ipify.org",
-        "https://v4.ident.me",
-        "https://ipecho.net/plain"
-    ]
-    
+def _fetch_ip(
+    services: list[str],
+    validator: Callable[[str], bool],
+    fallback: str,
+    label: str,
+) -> str:
+    """Try each service in order, returning the first valid IP, else fallback."""
     for service in services:
         try:
             response = requests.get(service, timeout=5)
             ip = response.text.strip()
-            if is_valid_ipv4(ip):
-                logger.info("IPv4 fetched from %s: %s", service, ip)
+            if validator(ip):
+                logger.info("%s fetched from %s: %s", label, service, ip)
                 return ip
         except Exception as e:
-            logger.warning("Failed to fetch IPv4 from %s: %s", service, e)
+            logger.warning("Failed to fetch %s from %s: %s", label, service, e)
             continue
-    
-    logger.warning("Using IPv4 fallback: 127.0.0.1")
-    return "127.0.0.1"  # Fallback
+
+    logger.warning("Using %s fallback: %s", label, fallback)
+    return fallback
+
+
+_IPV4_SERVICES = [
+    "https://ipv4.icanhazip.com",
+    "https://api.ipify.org",
+    "https://v4.ident.me",
+    "https://ipecho.net/plain",
+]
+
+_IPV6_SERVICES = [
+    "https://ipv6.icanhazip.com",
+    "https://v6.ident.me",
+]
+
+
+def fetch_ipv4() -> str:
+    """Fetch public IPv4 address."""
+    return _fetch_ip(_IPV4_SERVICES, is_valid_ipv4, "127.0.0.1", "IPv4")
 
 
 def fetch_ipv6() -> str:
     """Fetch public IPv6 address."""
-    services = [
-        "https://ipv6.icanhazip.com",
-        "https://v6.ident.me"
-    ]
-    
-    for service in services:
-        try:
-            response = requests.get(service, timeout=5)
-            ip = response.text.strip()
-            if is_valid_ipv6(ip):
-                logger.info("IPv6 fetched from %s: %s", service, ip)
-                return ip
-        except Exception as e:
-            logger.warning("Failed to fetch IPv6 from %s: %s", service, e)
-            continue
-    
-    logger.warning("Using IPv6 fallback: ::1")
-    return "::1"  # Fallback
+    return _fetch_ip(_IPV6_SERVICES, is_valid_ipv6, "::1", "IPv6")

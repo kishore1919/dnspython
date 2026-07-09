@@ -52,6 +52,9 @@ class Resolver(BaseResolver):
       - myip              → client's IP (A/AAAA/TXT)
       - b64.<text>        → Base64 encode (TXT)
       - d64.<data>        → Base64 decode (TXT)
+      - lower.<text>      → lowercase to uppercase (TXT)
+      - upper.<text>      → uppercase to lowercase (TXT)
+      - up.<text>          → uppercase echo (TXT)
     """
 
     CIDR_DOMAIN = "cidr"
@@ -60,7 +63,9 @@ class Resolver(BaseResolver):
     MYIP_DOMAINS = {"myip"}
     BASE64_ENCODE_PREFIX = "b64"
     BASE64_DECODE_PREFIX = "d64"
-    PTR_SUFFIXES = ("in-addr.arpa", "ip6.arpa")
+    LOWER_PREFIX = "lower"
+    UPPER_TO_LOWER_PREFIX = "upper"
+    UPPER_PREFIX = "up"
 
     def __init__(self, cache_ttl: int = 300):
         super().__init__()
@@ -78,6 +83,9 @@ class Resolver(BaseResolver):
             Rule("Client IP", self._match_client_ip, self._reply_client_ip),
             Rule("Base64 Encode", self._match_b64_encode, self._reply_b64_encode),
             Rule("Base64 Decode", self._match_b64_decode, self._reply_b64_decode),
+            Rule("lower -> UPPER", self._match_lower, self._reply_upper),
+            Rule("UPPER -> lower", self._match_upper_to_lower, self._reply_lower),
+            Rule("echo UPPER", self._match_echo_upper, self._reply_upper),
         ]
 
     def resolve(self, request: DNSRecord, handler: Any) -> DNSRecord:
@@ -162,19 +170,31 @@ class Resolver(BaseResolver):
             return {}
         return None
 
+    def _match_prefix_payload(self, ctx: QueryContext, prefix: str) -> Optional[Dict[str, Any]]:
+        """Match <prefix>.<payload> queries, returning the payload (original case)."""
+        if len(ctx.parts) > 1 and ctx.parts[0] == prefix:
+            return {"payload": ".".join(ctx.original_parts[1:])}
+        return None
+
     def _match_b64_encode(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
         """Match b64.<text> queries."""
-        if len(ctx.parts) > 1 and ctx.parts[0] == self.BASE64_ENCODE_PREFIX:
-            payload = ".".join(ctx.original_parts[1:])
-            return {"payload": payload}
-        return None
+        return self._match_prefix_payload(ctx, self.BASE64_ENCODE_PREFIX)
 
     def _match_b64_decode(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
         """Match d64.<data> queries."""
-        if len(ctx.parts) > 1 and ctx.parts[0] == self.BASE64_DECODE_PREFIX:
-            payload = ".".join(ctx.original_parts[1:])
-            return {"payload": payload}
-        return None
+        return self._match_prefix_payload(ctx, self.BASE64_DECODE_PREFIX)
+
+    def _match_lower(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
+        """Match lower.<text> queries."""
+        return self._match_prefix_payload(ctx, self.LOWER_PREFIX)
+
+    def _match_upper_to_lower(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
+        """Match upper.<text> queries."""
+        return self._match_prefix_payload(ctx, self.UPPER_TO_LOWER_PREFIX)
+
+    def _match_echo_upper(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
+        """Match up.<text> queries."""
+        return self._match_prefix_payload(ctx, self.UPPER_PREFIX)
 
     # --- Response Builders ---
 
@@ -234,29 +254,31 @@ class Resolver(BaseResolver):
         elif ctx.qtype == QTYPE.TXT:
             reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(ctx.client_ip)))
         else:
-            # Default: respond with appropriate type or TXT
-            if is_ipv4 and (ctx.qtype in (QTYPE.A, 0)):
-                reply.add_answer(RR(ctx.request.q.qname, QTYPE.A, rdata=A(ctx.client_ip)))
-            elif is_ipv6 and (ctx.qtype in (QTYPE.AAAA, 0)):
-                reply.add_answer(RR(ctx.request.q.qname, QTYPE.AAAA, rdata=AAAA(ctx.client_ip)))
-            else:
-                reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(ctx.client_ip)))
+            # Type mismatch (e.g. AAAA requested over IPv4): fall back to TXT.
+            reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(ctx.client_ip)))
         return reply
 
     def _reply_b64_encode(self, ctx: QueryContext, payload: str) -> DNSRecord:
         """Return Base64-encoded text."""
-        reply = ctx.request.reply()
-        if ctx.qtype == QTYPE.TXT:
-            encoded = encode_base64(payload)
-            reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(encoded)))
-        return reply
+        return self._reply_txt_transform(ctx, payload, encode_base64)
 
     def _reply_b64_decode(self, ctx: QueryContext, payload: str) -> DNSRecord:
         """Return Base64-decoded text."""
+        return self._reply_txt_transform(ctx, payload, decode_base64)
+
+    def _reply_upper(self, ctx: QueryContext, payload: str) -> DNSRecord:
+        """Return the query text converted to uppercase."""
+        return self._reply_txt_transform(ctx, payload, str.upper)
+
+    def _reply_lower(self, ctx: QueryContext, payload: str) -> DNSRecord:
+        """Return the query text converted to lowercase."""
+        return self._reply_txt_transform(ctx, payload, str.lower)
+
+    def _reply_txt_transform(self, ctx: QueryContext, payload: str, transform: Callable[[str], str]) -> DNSRecord:
+        """Return a TXT record containing transform(payload), for TXT queries only."""
         reply = ctx.request.reply()
         if ctx.qtype == QTYPE.TXT:
-            decoded = decode_base64(payload)
-            reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(decoded)))
+            reply.add_answer(RR(ctx.request.q.qname, QTYPE.TXT, rdata=TXT(transform(payload))))
         return reply
 
     # --- Helpers ---
@@ -288,14 +310,21 @@ def main() -> None:
     server = DNSServer(resolver, port=port, address=address)
 
     logger.info("DNS Server running on %s:%d", address, port)
+    examples = [
+        ("24.cidr TXT", "usable IPs in /24"),
+        ("24.mask.cidr A", "subnet mask for /24"),
+        ("time TXT", "current time"),
+        ("ip A/AAAA/TXT", "server's public IPs"),
+        ("myip A/AAAA/TXT", "your client IP"),
+        ("b64.hello TXT", "base64 encode 'hello'"),
+        ("d64.aGVsbG8 TXT", "base64 decode 'aGVsbG8'"),
+        ("lower.hello TXT", "lowercase -> uppercase 'HELLO'"),
+        ("upper.HELLO TXT", "uppercase -> lowercase 'hello'"),
+        ("up.hello TXT", "uppercase echo 'HELLO'"),
+    ]
     logger.info("Supported queries:")
-    logger.info("  dig @%s -p %d 24.cidr TXT +short       -> usable IPs", address, port)
-    logger.info("  dig @%s -p %d 24.mask.cidr A +short    -> subnet mask", address, port)
-    logger.info("  dig @%s -p %d time TXT +short          -> current time", address, port)
-    logger.info("  dig @%s -p %d ip A/AAAA/TXT +short     -> server's public IPs", address, port)
-    logger.info("  dig @%s -p %d myip A/AAAA/TXT +short   -> your client IP", address, port)
-    logger.info("  dig @%s -p %d b64.hello TXT +short     -> base64 encode 'hello'", address, port)
-    logger.info("  dig @%s -p %d d64.aGVsbG8 TXT +short   -> base64 decode 'aGVsbG8'", address, port)
+    for query, desc in examples:
+        logger.info("  dig @%s -p %d %-16s -> %s", address, port, query, desc)
 
     try:
         server.start_thread()
