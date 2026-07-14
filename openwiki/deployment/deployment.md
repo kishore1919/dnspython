@@ -34,7 +34,6 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY . .
 ENV PATH=/root/.local/bin:$PATH
-ENV DNS_PORT=20000
 ENV DNS_ADDRESS=0.0.0.0
 EXPOSE 20000/udp 20000/tcp
 CMD ["python", "main.py"]
@@ -45,7 +44,9 @@ CMD ["python", "main.py"]
 - Multi-stage for smaller final image
 - Installs deps in builder stage
 - Exposes both UDP and TCP 20000
-- Defaults to `0.0.0.0:20000`
+- Defaults to `0.0.0.0` with **OS-assigned ephemeral port** (`port=0` in code)
+- The `DNS_PORT` environment variable is currently **ignored** by the server (uses ephemeral port)
+- For fixed port in Docker, edit `utils/main.py` `main()` function's `port` argument
 
 ### docker-compose.yml
 
@@ -55,27 +56,17 @@ services:
     build: .
     container_name: dnspython
     ports:
-      - "8000:8000"  # Note: maps 8000, not 20000!
+      - "20000:20000/udp"   # Fixed port mapping for DNS
+      - "20000:20000/tcp"
     volumes:
       - .:/app
     environment:
-      - DNS_PORT=8000
       - DNS_ADDRESS=0.0.0.0
+      # DNS_PORT is currently ignored; server uses OS-assigned ephemeral port
+      # Docker port mapping (above) makes it reachable on fixed host port 20000
 ```
 
-**⚠️ Port mismatch**: Compose maps 8000 but Dockerfile EXPOSEs 20000. For DNS, fix this:
-
-```yaml
-# docker-compose.override.yml (recommended for prod)
-services:
-  dnspython:
-    ports:
-      - "20000:20000/udp"
-      - "20000:20000/tcp"
-    environment:
-      - DNS_PORT=20000
-      - DNS_ADDRESS=0.0.0.0
-```
+**Note**: The server binds to `port=0` (ephemeral) inside the container. Docker's port mapping (`-p 20000:20000`) forwards traffic from host port 20000 to whatever ephemeral port the container uses. The `DNS_PORT` environment variable is currently not read by the server.
 
 ### Build & Run
 
@@ -110,7 +101,8 @@ services:
       - "20000:20000/tcp"
     environment:
       - DNS_ADDRESS=0.0.0.0
-      - DNS_PORT=20000
+      # DNS_PORT is currently ignored; server uses OS-assigned ephemeral port
+      # Docker port mapping (above) makes it reachable on fixed host port 20000
       - LOG_LEVEL=INFO
     healthcheck:
       test: ["CMD", "dig", "@localhost", "-p", "20000", "time", "TXT", "+short", "+timeout=2"]

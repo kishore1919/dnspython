@@ -4,7 +4,7 @@ title: Architecture Overview
 description: High-level architecture of the DNS Python Server - rule-based resolver, query pipeline, and utility modules.
 timestamp: 2025-07-14T16:45:00Z
 tags: [architecture, resolver, dns, design]
-resource: /main.py
+resource: /utils/main.py
 ---
 
 # Architecture Overview
@@ -35,7 +35,7 @@ resource: /main.py
 
 ## Core Components
 
-### 1. Resolver Pipeline (`main.py:Resolver`)
+### 1. Resolver Pipeline (`utils/main.py:Resolver`)
 
 The resolver uses a **rule-based pipeline** rather than a monolithic `resolve()` method:
 
@@ -44,6 +44,7 @@ self.rules: List[Rule] = [
     Rule("CIDR Usable IPs", self._match_cidr, self._reply_cidr),
     Rule("Subnet Mask", self._match_subnet_mask, self._reply_subnet_mask),
     Rule("Time Services", self._match_time, self._reply_time),
+    Rule("Time Conversion", self._match_time_convert, self._reply_time_convert),
     Rule("Server Public IP", self._match_server_ip, self._reply_server_ip),
     Rule("Client IP", self._match_client_ip, self._reply_client_ip),
     Rule("Base64 Encode", self._match_b64_encode, self._reply_b64_encode),
@@ -61,7 +62,7 @@ self.rules: List[Rule] = [
 4. Handler builds `DNSRecord` reply with those params
 5. Return reply (empty reply = no match = NXDOMAIN-like empty response)
 
-### 2. QueryContext (`main.py:QueryContext`)
+### 2. QueryContext (`utils/main.py:QueryContext`)
 
 Immutable dataclass carrying parsed query data through the pipeline:
 
@@ -78,7 +79,7 @@ class QueryContext:
     original_parts: List[str]  # Case-preserved parts for payloads
 ```
 
-### 3. Rule Pattern (`main.py:Rule`)
+### 3. Rule Pattern (`utils/main.py:Rule`)
 
 ```python
 class Rule(NamedTuple):
@@ -97,7 +98,16 @@ class Rule(NamedTuple):
 
 - 5-minute TTL (configurable via `cache_ttl` in `Resolver.__init__`)
 - Caches both IPv4 and IPv6
+- Thread-safe with `threading.Lock`
 - Fallback to loopback on fetch failure
+
+### 5. CLI Entry Point (`utils/main.py:main`)
+
+The `main()` function now serves dual purpose:
+1. **DNS Server mode** (default): Starts `DNSServer` on ephemeral port (port 0)
+2. **CLI Utility mode**: When any utility flag is passed (`--ct`, `--cidr`, `--ampm`, etc.), runs that utility directly without starting DNS server
+
+Argument parsing uses `argparse` with mutually exclusive groups for server vs CLI modes.
 - Logged at INFO level on cache miss
 
 ## Utility Modules (`utils/`)

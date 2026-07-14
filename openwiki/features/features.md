@@ -8,7 +8,7 @@ tags: ["features", "dns", "reference", "api"]
 
 ## DNS Query Reference
 
-All queries target the DNS server at `localhost:20000` (configurable via `DNS_PORT`/`DNS_ADDRESS`).
+All queries target the DNS server. The server binds to an OS-assigned ephemeral port by default (printed on startup). Use `-p <port>` in `dig` with the actual port shown at startup.
 
 **Query Format**: `dig @<host> -p <port> <qname> <QTYPE> +short`
 
@@ -18,7 +18,7 @@ All queries target the DNS server at `localhost:20000` (configurable via `DNS_PO
 
 #### Usable IPs (TXT)
 ```
-dig @localhost -p 20000 24.cidr TXT +short
+dig @localhost -p <port> 24.cidr TXT +short
 # → "254"
 ```
 - **Pattern**: `<prefix>.cidr` (0-32)
@@ -28,7 +28,7 @@ dig @localhost -p 20000 24.cidr TXT +short
 
 #### Subnet Mask (A)
 ```
-dig @localhost -p 20000 24.mask.cidr A +short
+dig @localhost -p <port> 24.mask.cidr A +short
 # → "255.255.255.0"
 ```
 - **Pattern**: `<prefix>.mask.cidr` (0-32)
@@ -41,7 +41,7 @@ dig @localhost -p 20000 24.mask.cidr A +short
 
 #### Current Time (TXT)
 ```
-dig @localhost -p 20000 time TXT +short
+dig @localhost -p <port> time TXT +short
 # → "2025-07-14 16:45:30"
 ```
 - **Pattern**: `time`
@@ -50,20 +50,31 @@ dig @localhost -p 20000 time TXT +short
 
 #### Time-based IP (A)
 ```
-dig @localhost -p 20000 time A +short
+dig @localhost -p <port> time A +short
 # → "127.0.0.45"  (where 45 = current second + 1)
 ```
 - **Pattern**: `time`
 - **QTYPE**: A
 - **Response**: `127.0.0.<second+1>` (range 1-60)
 
----
+#### Railway Time → AM/PM Conversion (TXT)
+```
+dig @localhost -p <port> ampm.14.30.00 TXT +short
+# → "2:30:00 PM"
+
+dig @localhost -p <port> ampm.14-30-00 TXT +short
+# → "2:30:00 PM"
+```
+- **Pattern**: `ampm.<HH>.<MM>.<SS>` or `ampm.<HH>-<MM>-<SS>`
+- **QTYPE**: TXT only
+- **Response**: 12-hour format `H:MM:SS AM/PM` (no leading zero on hour)
+- **Validation**: Invalid times (e.g., 25:00:00, 12:60:00) return error text
 
 ### 3. IP Address Services
 
 #### Server Public IPv4 (A)
 ```
-dig @localhost -p 20000 ip A +short
+dig @localhost -p <port> ip A +short
 # → "203.0.113.10"
 ```
 - **Pattern**: `ip`
@@ -72,7 +83,7 @@ dig @localhost -p 20000 ip A +short
 
 #### Server Public IPv6 (AAAA)
 ```
-dig @localhost -p 20000 ip AAAA +short
+dig @localhost -p <port> ip AAAA +short
 # → "2001:db8::10"
 ```
 - **Pattern**: `ip`
@@ -81,7 +92,7 @@ dig @localhost -p 20000 ip AAAA +short
 
 #### Server Public IPs (TXT)
 ```
-dig @localhost -p 20000 ip TXT +short
+dig @localhost -p <port> ip TXT +short
 # → "IPv4: 203.0.113.10, IPv6: 2001:db8::10"
 ```
 - **Pattern**: `ip`
@@ -91,15 +102,15 @@ dig @localhost -p 20000 ip TXT +short
 #### Client IP (A/AAAA/TXT)
 ```
 # IPv4 client
-dig @localhost -p 20000 myip A +short
+dig @localhost -p <port> myip A +short
 # → "192.168.1.50"
 
 # IPv6 client
-dig @localhost -p 20000 myip AAAA +short
+dig @localhost -p <port> myip AAAA +short
 # → "2001:db8::1"
 
 # Any client (fallback)
-dig @localhost -p 20000 myip TXT +short
+dig @localhost -p <port> myip TXT +short
 # → "192.168.1.50"
 ```
 - **Pattern**: `myip`
@@ -122,7 +133,7 @@ dig @localhost -p 20000 b64.hello TXT +short
 
 #### Decode (TXT)
 ```
-dig @localhost -p 20000 d64.aGVsbG8= TXT +short
+dig @localhost -p <port> d64.aGVsbG8= TXT +short
 # → "hello"
 ```
 - **Pattern**: `d64.<base64>` (dots preserved)
@@ -132,14 +143,14 @@ dig @localhost -p 20000 d64.aGVsbG8= TXT +short
 
 ---
 
-### 5. Case Conversion (NEW in 530ef0f)
+### 5. Case Conversion
 
 #### Lowercase → UPPERCASE (TXT)
 ```
-dig @localhost -p 20000 lower.hello TXT +short
+dig @localhost -p <port> lower.hello TXT +short
 # → "HELLO"
 
-dig @localhost -p 20000 lower.foo.bar TXT +short
+dig @localhost -p <port> lower.foo.bar TXT +short
 # → "FOO.BAR"
 ```
 - **Pattern**: `lower.<text>`
@@ -148,10 +159,10 @@ dig @localhost -p 20000 lower.foo.bar TXT +short
 
 #### UPPERCASE → lowercase (TXT)
 ```
-dig @localhost -p 20000 upper.HELLO TXT +short
+dig @localhost -p <port> upper.HELLO TXT +short
 # → "hello"
 
-dig @localhost -p 20000 upper.FOO.BAR TXT +short
+dig @localhost -p <port> upper.FOO.BAR TXT +short
 # → "foo.bar"
 ```
 - **Pattern**: `upper.<TEXT>`
@@ -160,12 +171,27 @@ dig @localhost -p 20000 upper.FOO.BAR TXT +short
 
 #### Echo as UPPERCASE (TXT)
 ```
-dig @localhost -p 20000 up.hello TXT +short
+dig @localhost -p <port> up.hello TXT +short
 # → "HELLO"
 ```
 - **Pattern**: `up.<text>`
 - **QTYPE**: TXT only
 - **Response**: Uppercased payload (same as `lower.` but different semantic)
+
+---
+
+### 6. Railway Time → AM/PM Conversion (TXT)
+```
+dig @localhost -p <port> ampm.14.30.00 TXT +short
+# → "2:30:00 PM"
+
+dig @localhost -p <port> ampm.14-30-00 TXT +short
+# → "2:30:00 PM"
+```
+- **Pattern**: `ampm.<HH>.<MM>.<SS>` or `ampm.<HH>-<MM>-<SS>`
+- **QTYPE**: TXT only
+- **Response**: 12-hour format `H:MM:SS AM/PM` (no leading zero on hour)
+- **Validation**: Invalid times (e.g., 25:00:00, 12:60:00) return error text
 
 ---
 
@@ -176,6 +202,7 @@ dig @localhost -p 20000 up.hello TXT +short
 | `X.cidr` | ❌ | ❌ | ✅ |
 | `X.mask.cidr` | ✅ | ❌ | ❌ |
 | `time` | ✅ (fake IP) | ❌ | ✅ |
+| `ampm.*` | ❌ | ❌ | ✅ |
 | `ip` | ✅ | ✅ | ✅ |
 | `myip` | ✅* | ✅* | ✅ |
 | `b64.*` | ❌ | ❌ | ✅ |
@@ -187,6 +214,55 @@ dig @localhost -p 20000 up.hello TXT +short
 *Type mismatch falls back to TXT
 
 ---
+
+## CLI Tool Reference (NEW)
+
+The `dnspython` CLI tool (installed via `uv tool install .` or `pip install -e .`) provides direct access to all utilities without starting a DNS server:
+
+```bash
+# Time utilities
+dnspython --ct                    # Print current local time
+dnspython --ampm "14:30:00"      # Convert 24h to 12h format
+
+# CIDR utilities
+dnspython --cidr 24              # Usable IPs for /24
+dnspython --mask 24              # Subnet mask for /24
+
+# Base64 utilities
+dnspython --b64-encode "hello"   # Base64 encode
+dnspython --b64-decode "aGVsbG8=" # Base64 decode
+# Short flags: --b64e, --b64d
+
+# Case conversion
+dnspython --upper "hello"        # Convert to UPPERCASE
+dnspython --lower "HELLO"        # Convert to lowercase
+
+# IP utilities
+dnspython --ip                   # Server's public IPv4 and IPv6
+dnspython --myip                 # Your local network IP
+
+# DNS Server mode (default, no flags)
+dnspython                        # Start DNS server on ephemeral port
+dnspython -a 0.0.0.0             # Bind to all interfaces
+```
+
+---
+
+## Using as Python Package
+
+```python
+from utils import convert_railway_to_ampm, get_current_time, encode_base64
+
+# Convert railway time to AM/PM format
+print(convert_railway_to_ampm("14:30:00"))  # Output: 2:30:00 PM
+print(convert_railway_to_ampm("00:00:00"))  # Output: 12:00:00 AM
+
+# Get current time
+print(get_current_time())  # Output: 2026-07-14 14:30:00
+
+# Base64 encode
+print(encode_base64("hello"))  # Output: aGVsbG8=
+```
 
 ## Response Behavior
 

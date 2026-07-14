@@ -10,10 +10,10 @@ tags: ["architecture", "source-map", "reference"]
 
 ```
 dnspython/
-├── main.py                      # Main DNS server entrypoint + Resolver class
+├── main.py                      # Legacy CLI wrapper (backward-compatible)
 ├── Dockerfile                   # Multi-stage Docker build
 ├── docker-compose.yml           # Docker Compose config
-├── pyproject.toml               # Project metadata (Python 3.13+)
+├── pyproject.toml               # Project metadata (Python 3.11+, exposes 'dnspython' CLI)
 ├── requirements.txt             # Pinned dependencies (requests==2.28.0)
 ├── uv.lock                      # uv lockfile
 ├── README.md                    # Project documentation
@@ -26,12 +26,13 @@ dnspython/
 ├── tests/
 │   └── test_resolver.py         # Comprehensive test suite
 ├── utils/
-│   ├── __init__.py              # Package init
-│   ├── base64_utils.py          # Base64 encode/decode utilities
+│   ├── __init__.py              # Package init with public exports
+│   ├── main.py                  # Main DNS server entry point and resolver
+│   ├── base64_utils.py          # Base64 encoding/decoding utilities
 │   ├── cidr_utils.py            # CIDR calculation utilities
-│   ├── ip_fetch_utils.py        # Public IP fetching with fallbacks
+│   ├── ip_fetch_utils.py        # Public IP fetching utilities
 │   ├── ip_utils.py              # IP validation, subnet mask, int↔IP conversion
-│   └── time_utils.py            # Time formatting utilities
+│   └── time_utils.py            # Time formatting + railway→AM/PM conversion
 └── openwiki/                    # Generated documentation (this wiki)
 ```
 
@@ -39,9 +40,22 @@ dnspython/
 
 ## File-by-File Reference
 
-### `main.py` — Main Entry Point & Resolver
+### `main.py` — Legacy CLI Wrapper
 
-**Purpose**: DNS server startup, Resolver class with rule-based routing
+**Purpose**: Backward-compatible entry point that delegates to `utils.main:main`
+
+```python
+from utils.main import main
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+### `utils/main.py` — Main Entry Point & Resolver + CLI
+
+**Purpose**: DNS server startup, Resolver class with rule-based routing, and CLI tool
 
 **Key Components**:
 
@@ -49,11 +63,11 @@ dnspython/
 |-----------|------|---------|
 | `QueryContext` | `@dataclass` | Immutable query context (request, qtype, qname, client info, parsed parts) |
 | `Rule` | `NamedTuple` | Matcher + handler pair: `(name, matcher_fn, handler_fn)` |
-| `Resolver` | `class` (extends `BaseResolver`) | Core resolver with rule registry and caching |
+| `Resolver` | `class` (extends `BaseResolver`) | Core resolver with rule registry and thread-safe caching |
 | `Resolver.rules` | `List[Rule]` | Ordered rule registry (first match wins) |
 | `Resolver.resolve()` | `method` | Main entry: parses query, iterates rules, dispatches |
-| `Resolver._get_public_ips()` | `method` | Cached public IP fetch (5-min TTL) |
-| `main()` | `function` | Server startup, logging, signal handling |
+| `Resolver._get_public_ips()` | `method` | Thread-safe cached public IP fetch (5-min TTL) |
+| `main()` | `function` | Dual-mode: DNS server (default) or CLI utility (with flags) |
 
 **Rule Registry** (in order):
 
@@ -62,6 +76,7 @@ dnspython/
 | CIDR Usable IPs | `_match_cidr` | `_reply_cidr` | `X.cidr` (TXT) |
 | Subnet Mask | `_match_subnet_mask` | `_reply_subnet_mask` | `X.mask.cidr` (A) |
 | Time Services | `_match_time` | `_reply_time` | `time` (TXT, A) |
+| Time Conversion | `_match_time_convert` | `_reply_time_convert` | `ampm.HH.MM.SS` or `ampm.HH-MM-SS` (TXT) |
 | Server Public IP | `_match_server_ip` | `_reply_server_ip` | `ip` (A, AAAA, TXT) |
 | Client IP | `_match_client_ip` | `_reply_client_ip` | `myip` (A, AAAA, TXT) |
 | Base64 Encode | `_match_b64_encode` | `_reply_b64_encode` | `b64.<text>` (TXT) |
@@ -73,6 +88,13 @@ dnspython/
 **Helper Methods**:
 - `_match_prefix_payload(ctx, prefix)` — Shared prefix matcher for `b64.`, `d64.`, `lower.`, `upper.`, `up.`
 - `_reply_txt_transform(ctx, payload, transform)` — Shared TXT response builder
+- `_match_time_convert(ctx)` — Matches `ampm.<time>` with dots or dashes
+
+**CLI Argument Parsing**:
+- Mutually exclusive groups: server mode (default) vs utility flags
+- Utility flags: `--ct/--current-time`, `--cidr`, `--mask`, `--ampm`, `--b64-encode/--b64e`, `--b64-decode/--b64d`, `--upper/--ltu`, `--lower/--utl`, `--ip`, `--myip`
+- Server flags: `-a/--address` (bind address)
+- Default server port: 0 (OS-assigned ephemeral port)
 
 ---
 
@@ -83,7 +105,7 @@ dnspython/
 | `is_valid_ipv4(ip)` | Validate IPv4 address |
 | `is_valid_ipv6(ip)` | Validate IPv6 address |
 | `subnet_mask_from_prefix(prefix)` | CIDR prefix → subnet mask (e.g., 24 → 255.255.255.0) |
-| `int_to_ip(x)` | 32-bit int → IPv4 string |
+| `int_to_ip(x)` | 32-bit int → IPv4 string (uses `ipaddress.IPv4Address(x & 0xFFFFFFFF)`) |
 
 ---
 
@@ -91,7 +113,7 @@ dnspython/
 
 | Function | Purpose |
 |----------|---------|
-| `calculate_usable_ips(prefix)` | Usable IPs in /prefix (handles /31, /32 special cases) |
+| `calculate_usable_ips(prefix)` | Usable IPs in /prefix (handles /31, /32 edge cases) |
 
 ---
 
@@ -152,7 +174,7 @@ dnspython/
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | Project metadata, Python ≥3.13, deps: dnslib, requests |
+| `pyproject.toml` | Project metadata, Python ≥3.11, deps: dnslib, requests; entry point `dnspython = utils.main:main` |
 | `requirements.txt` | Pinned deps: dnspython, dnslib, ipaddress, requests==2.28.0 |
 | `Dockerfile` | Multi-stage: builder (uv) → runtime (python:3.12-slim) |
 | `docker-compose.yml` | Service `dnspython`, builds `.`, maps port 8000:8000 |

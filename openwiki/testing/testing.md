@@ -21,6 +21,8 @@ tests/
 
 ### Using uv (recommended)
 ```bash
+uv run --extra dev pytest
+# or
 uv run python -m unittest tests.test_resolver -v
 ```
 
@@ -46,7 +48,7 @@ python -m unittest tests.test_resolver.TestIpUtils -v
 | `TestIpUtils` | `utils/ip_utils.py` | IP validation, subnet mask, int↔IP conversion |
 | `TestCidrUtils` | `utils/cidr_utils.py` | Usable IP calculations (incl. /31, /32 edge cases) |
 | `TestBase64Utils` | `utils/base64_utils.py` | Encode/decode, unicode, padding, roundtrip, invalid input |
-| `TestTimeUtils` | `utils/time_utils.py` | Time format, second range, railway→am/pm conversion |
+| `TestTimeUtils` | `utils/time_utils.py` | Time format, second range, railway→AM/PM conversion (valid + invalid) |
 | `TestIpFetchUtils` | `utils/ip_fetch_utils.py` | Mocked HTTP, fallback chain, error handling |
 
 ### Resolver Integration Tests
@@ -108,11 +110,21 @@ def test_fetch_ipv4_success(self, mock_get):
 
 **Resolver internal method (instance-level)**:
 ```python
-@patch.object(Resolver, "_get_public_ips", return_value=("203.0.113.10", "2001:db8::10"))
-def test_server_ip_a(self, _mock_ips):
-    request = DNSRecord.question("ip", "A")
-    reply = self.resolver.resolve(request, self.handler)
-    self.assertEqual(str(reply.rr[0].rdata), "203.0.113.10")
+@patch("utils.main.fetch_ipv4", return_value="1.2.3.4")
+@patch("utils.main.fetch_ipv6", return_value="2001:db8::2")
+def test_get_public_ips_fetches_and_caches(self, mock_ipv6, mock_ipv4):
+    resolver = Resolver(cache_ttl=60)
+    ipv4, ipv6 = resolver._get_public_ips()
+    self.assertEqual((ipv4, ipv6), ("1.2.3.4", "2001:db8::2"))
+```
+
+**Time module mocking** (for cache TTL tests):
+```python
+with patch("utils.main.time.time", side_effect=[100.0, 100.0, 102.0, 102.0, 102.0, 102.0]):
+    # First fetch at t=100
+    self.assertEqual(resolver._get_public_ips(), ("1.1.1.1", "::1"))
+    # After TTL at t=102 (cache_time was 100, TTL=1)
+    self.assertEqual(resolver._get_public_ips(), ("2.2.2.2", "::2"))
 ```
 
 ### 5. Forcing Error Paths
@@ -132,6 +144,34 @@ def test_resolve_handles_handler_exception(self):
     request = DNSRecord.question("24.cidr", "TXT")
     reply = self.resolver.resolve(request, self.handler)
     self.assertEqual(len(reply.rr), 0)  # Empty response on error
+```
+
+---
+
+## New CLI Tests
+
+### `TestCLI` — Command-line Interface Tests
+
+| Test Method | Coverage |
+|-------------|----------|
+| `test_cli_current_time` | `--ct` / `--current-time` flag prints current time |
+| `test_cli_utilities` | All utility flags: `--cidr`, `--mask`, `--ampm`, `--b64-encode`, `--b64-decode`, `--upper`, `--lower`, `--ip`, `--myip` |
+
+**Pattern**: Uses `argparse.ArgumentParser.parse_args` mocking to simulate CLI arguments, then captures `print()` output.
+
+```python
+@patch("utils.main.get_current_time", return_value="2026-07-14 17:50:00")
+@patch("argparse.ArgumentParser.parse_args")
+def test_cli_current_time(self, mock_parse_args, mock_get_time):
+    import argparse
+    from utils.main import main
+    mock_parse_args.return_value = argparse.Namespace(
+        address="127.0.0.1", ct=True, cidr=None, mask=None, ampm=None,
+        b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=False
+    )
+    with patch("builtins.print") as mock_print:
+        main()
+        mock_print.assert_called_once_with("2026-07-14 17:50:00")
 ```
 
 ---

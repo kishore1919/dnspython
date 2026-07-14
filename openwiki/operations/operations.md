@@ -9,17 +9,17 @@ tags: ["operations", "runbook", "troubleshooting", "monitoring"]
 ## Quick Start
 
 ```bash
-# Direct run
-python main.py
+# Run via installed CLI tool (recommended)
+dnspython
 
-# With custom port/address
-DNS_PORT=30000 DNS_ADDRESS=0.0.0.0 python main.py
+# Run via Python module
+python -m utils.main
 
-# Docker
-docker-compose up --build
+# With custom bind address (port is OS-assigned ephemeral by default)
+DNS_ADDRESS=0.0.0.0 python -m utils.main
 ```
 
-Server binds to `127.0.0.1:20000` by default (UDP + TCP).
+Server binds to `127.0.0.1` on an **OS-assigned ephemeral port** by default. The assigned port is printed on startup — use that port in `dig` commands.
 
 ---
 
@@ -29,14 +29,32 @@ Server binds to `127.0.0.1:20000` by default (UDP + TCP).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DNS_PORT` | `20000` | UDP/TCP port to bind |
 | `DNS_ADDRESS` | `127.0.0.1` | Bind address (use `0.0.0.0` for all interfaces) |
 | `LOG_LEVEL` | `INFO` | Python logging level (DEBUG, INFO, WARNING, ERROR) |
+
+**Note**: `DNS_PORT` is ignored — the server always binds to port `0` (OS-assigned ephemeral port). If you need a fixed port, edit the `port` argument in `main()` in `utils/main.py`.
 
 ### Constructor Options
 
 ```python
 Resolver(cache_ttl=300)  # IP cache TTL in seconds (default 5 min)
+```
+
+### CLI Flags
+
+```bash
+dnspython --help                    # Show all options
+dnspython -a 0.0.0.0                # Bind to all interfaces
+dnspython --ct                      # Print current time and exit
+dnspython --cidr 24                 # Calculate usable IPs for /24
+dnspython --mask 24                 # Get subnet mask for /24
+dnspython --ampm "14:30:00"         # Convert 24h time to 12h AM/PM
+dnspython --b64-encode "hello"      # Base64 encode
+dnspython --b64-decode "aGVsbG8="   # Base64 decode
+dnspython --upper "hello"           # Convert to uppercase
+dnspython --lower "HELLO"           # Convert to lowercase
+dnspython --ip                      # Get public IPv4 and IPv6
+dnspython --myip                    # Get local network IP
 ```
 
 ---
@@ -56,7 +74,6 @@ services:
       - "20000:20000/tcp"
     environment:
       - DNS_ADDRESS=0.0.0.0
-      - DNS_PORT=20000
       - LOG_LEVEL=INFO
     restart: unless-stopped
     healthcheck:
@@ -66,7 +83,7 @@ services:
       retries: 3
 ```
 
-**Note**: The default `docker-compose.yml` maps port 8000. For DNS, change to 20000/udp+tcp.
+**Note**: The default `docker-compose.yml` maps port 8000. For DNS, override to map 20000/udp+tcp as shown above. The container runs with `port=0` (ephemeral), but Docker's port mapping uses the fixed port 20000.
 
 ### Systemd Service (Linux)
 
@@ -99,8 +116,14 @@ WantedBy=multi-user.target
 
 ```bash
 # Quick health check - should return current time
-dig @localhost -p 20000 time TXT +short +timeout=2
+# Use the actual port printed at startup (or 20000 in Docker with port mapping)
+dig @localhost -p <actual_port> time TXT +short +timeout=2
 # Expected: "2025-07-14 16:45:30"
+```
+
+In Docker with the port mapping above, use port 20000:
+```bash
+dig @localhost -p 20000 time TXT +short +timeout=2
 ```
 
 ### Key Metrics to Monitor
@@ -127,31 +150,23 @@ dig @localhost -p 20000 time TXT +short +timeout=2
 
 ### Port Already in Use
 
-```
-OSError: [Errno 98] Address already in use
-```
+The server uses an OS-assigned ephemeral port by default (`port=0`), so port conflicts are unlikely. If you need a fixed port (e.g., for Docker health checks or firewall rules), edit the `port` argument in `main()` in `utils/main.py`.
 
-**Fix**:
-```bash
-# Find process on port 20000
-ss -ulpn | grep :20000
-lsof -i :20000
-
-# Kill or change DNS_PORT
-DNS_PORT=20001 python main.py
-```
+If you do encounter a port conflict:
 
 ### DNS Queries Not Working
 
-1. **Verify server is running**:
+1. **Verify server is running** (check the actual port printed at startup):
    ```bash
-   ss -ulpn | grep :20000
-   # Should show: udp UNCONN 0 0 127.0.0.1:20000 0.0.0.0:*
+   # The server logs its actual port on startup, e.g.:
+   # 2025-07-14 16:45:30 [INFO] dnspython: DNS Server running on 127.0.0.1:54321
+   ss -ulpn | grep dnspython
+   # Or check logs for the actual port
    ```
 
-2. **Test locally**:
+2. **Test locally** (use the actual port from logs):
    ```bash
-   dig @127.0.0.1 -p 20000 time TXT +short
+   dig @127.0.0.1 -p <actual_port> time TXT +short
    ```
 
 3. **Check firewall** (if binding 0.0.0.0):
