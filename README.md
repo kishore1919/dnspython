@@ -60,10 +60,10 @@ dnspython
 ```
 Or run the Python wrapper script:
 ```bash
-python main.py
+python -m utils.main
 ```
 
-*Note: The server will automatically bind to an available ephemeral port chosen by the OS to avoid port conflicts. The assigned port and query examples will be displayed on startup.*
+*Note: The server automatically binds to an available ephemeral port chosen by the OS (it ignores any fixed port) to avoid port conflicts. The assigned port and query examples are printed on startup — use that port in the `dig` commands below in place of `20000`.*
 
 ### Direct CLI Utilities
 You can execute all utility functionalities directly from the terminal without starting the DNS server by specifying their respective flags:
@@ -109,10 +109,10 @@ dnspython --myip
 #### CIDR Calculations
 ```bash
 # Get number of usable IPs for /24 subnet
-dig @localhost -p 20000 24.cidr TXT +short
+dig @localhost -p <port> 24.cidr TXT +short
 
 # Get subnet mask for /24 prefix
-dig @localhost -p 20000 24.mask.cidr A +short
+dig @localhost -p <port> 24.mask.cidr A +short
 ```
 
 #### Time Services
@@ -131,25 +131,25 @@ dig @localhost -p <port> ampm.14-30-00 TXT +short
 #### IP Address Services
 ```bash
 # Get server's public IPv4
-dig @localhost -p 20000 ip A +short
+dig @localhost -p <port> ip A +short
 
 # Get server's public IPv6
-dig @localhost -p 20000 ip AAAA +short
+dig @localhost -p <port> ip AAAA +short
 
 # Get server's public IPs as text
-dig @localhost -p 20000 ip TXT +short
+dig @localhost -p <port> ip TXT +short
 
 # Get your client IP
-dig @localhost -p 20000 myip A +short
+dig @localhost -p <port> myip A +short
 ```
 
 #### Base64 Utilities
 ```bash
 # Base64 encode 'hello'
-dig @localhost -p 20000 b64.hello TXT +short
+dig @localhost -p <port> b64.hello TXT +short
 
 # Base64 decode 'aGVsbG8' (which is 'hello')
-dig @localhost -p 20000 d64.aGVsbG8 TXT +short
+dig @localhost -p <port> d64.aGVsbG8 TXT +short
 ```
 
 ### Using as Python Package
@@ -229,16 +229,16 @@ python -m unittest tests/test_resolver.py
 ## Configuration
 
 ### Server Configuration
-The server binds to `127.0.0.1:20000` by default. You can configure this using environment variables:
-- `DNS_PORT`: Port to listen on (default: `20000`)
-- `DNS_ADDRESS`: Address to bind to (default: `127.0.0.1`)
+The server binds to `127.0.0.1` by default (override with the `DNS_ADDRESS` environment variable or the `-a/--address` flag). The listen port is chosen automatically by the OS as an available ephemeral port (any `DNS_PORT` environment variable is currently ignored) and printed on startup.
 
-For example, to run on a different port:
+- `DNS_ADDRESS`: Address to bind to (default: `127.0.0.1`)
+- `-a, --address`: Same as `DNS_ADDRESS`, passed on the command line
+
+For example, to bind to all interfaces:
 ```bash
 # Windows PowerShell
-$env:DNS_PORT="30000"
 $env:DNS_ADDRESS="0.0.0.0"
-python main.py
+python -m utils.main
 ```
 
 ### IP Fetch Services
@@ -249,7 +249,7 @@ The server uses multiple public IP fetch services with fallback:
 ## Troubleshooting
 
 ### Common Issues
-- **Port already in use**: Change the `DNS_PORT` environment variable or stop the conflicting service.
+- **Port already in use**: The server uses an OS-assigned ephemeral port, so conflicts are unlikely. If you need a fixed port, edit the `port` argument in `main()` under `utils/main.py`.
 - **DNS queries not working**: Ensure the server is running and check firewall/network settings.
 - **IP fetch failures**: The server will log a warning and fall back to localhost loopback addresses.
 
