@@ -3,12 +3,12 @@ from unittest.mock import MagicMock, patch
 
 from dnslib import DNSRecord, QTYPE
 
-from main import QueryContext, Resolver
+from utils.main import QueryContext, Resolver
 from utils.base64_utils import decode_base64, encode_base64
 from utils.cidr_utils import calculate_usable_ips
 from utils.ip_fetch_utils import fetch_ipv4, fetch_ipv6
 from utils.ip_utils import int_to_ip, is_valid_ipv4, is_valid_ipv6, subnet_mask_from_prefix
-from utils.time_utils import get_current_second, get_current_time
+from utils.time_utils import get_current_second, get_current_time, convert_railway_to_ampm
 
 
 class DummyHandler:
@@ -138,6 +138,34 @@ class TestTimeUtils(unittest.TestCase):
         self.assertIsInstance(sec, int)
         self.assertGreaterEqual(sec, 0)
         self.assertLessEqual(sec, 59)
+
+    def test_convert_railway_to_ampm_basic(self):
+        self.assertEqual(convert_railway_to_ampm("14:30:00"), "2:30:00 PM")
+        self.assertEqual(convert_railway_to_ampm("09:15:00"), "9:15:00 AM")
+        self.assertEqual(convert_railway_to_ampm("00:45:00"), "12:45:00 AM")
+        self.assertEqual(convert_railway_to_ampm("12:00:00"), "12:00:00 PM")
+        self.assertEqual(convert_railway_to_ampm("23:59:59"), "11:59:59 PM")
+        self.assertEqual(convert_railway_to_ampm("01:05:30"), "1:05:30 AM")
+
+    def test_convert_railway_to_ampm_edge_cases(self):
+        self.assertEqual(convert_railway_to_ampm("00:00:00"), "12:00:00 AM")
+        self.assertEqual(convert_railway_to_ampm("12:00:01"), "12:00:01 PM")
+        self.assertEqual(convert_railway_to_ampm("11:59:59"), "11:59:59 AM")
+        self.assertEqual(convert_railway_to_ampm("13:00:00"), "1:00:00 PM")
+
+    def test_convert_railway_to_ampm_invalid_format(self):
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("25:00:00")
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("12:60:00")
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("12:00:60")
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("invalid")
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("12:30")
+        with self.assertRaises(ValueError):
+            convert_railway_to_ampm("12:30:00:00")
 
 
 class TestIpFetchUtils(unittest.TestCase):
@@ -515,12 +543,33 @@ class TestResolverReplies(unittest.TestCase):
         self.assertEqual(len(reply.rr), 1)
         self.assertEqual(str(reply.rr[0].rdata), "9.9.9.9")
 
+    def test_reply_time_convert(self):
+        # Test matching with dots
+        ctx = _make_ctx("ampm.14.30.00", "TXT")
+        matched = self.resolver._match_time_convert(ctx)
+        self.assertEqual(matched, {"time_str": "14:30:00"})
+        reply = self.resolver._reply_time_convert(ctx, **matched)
+        self.assertEqual(_txt(reply), "2:30:00 PM")
+
+        # Test matching with dashes
+        ctx = _make_ctx("ampm.14-30-00", "TXT")
+        matched = self.resolver._match_time_convert(ctx)
+        self.assertEqual(matched, {"time_str": "14:30:00"})
+        reply = self.resolver._reply_time_convert(ctx, **matched)
+        self.assertEqual(_txt(reply), "2:30:00 PM")
+
+        # Test invalid time format error handling
+        ctx = _make_ctx("ampm.99.99.99", "TXT")
+        matched = self.resolver._match_time_convert(ctx)
+        reply = self.resolver._reply_time_convert(ctx, **matched)
+        self.assertIn("Invalid time format", _txt(reply))
+
 
 class TestGetPublicIps(unittest.TestCase):
     def test_get_public_ips_fetches_and_caches(self):
         resolver = Resolver(cache_ttl=60)
-        with patch("main.fetch_ipv4", return_value="1.2.3.4") as m4, patch(
-            "main.fetch_ipv6", return_value="2001:db8::2"
+        with patch("utils.main.fetch_ipv4", return_value="1.2.3.4") as m4, patch(
+            "utils.main.fetch_ipv6", return_value="2001:db8::2"
         ) as m6:
             ipv4, ipv6 = resolver._get_public_ips()
             self.assertEqual((ipv4, ipv6), ("1.2.3.4", "2001:db8::2"))
@@ -535,9 +584,9 @@ class TestGetPublicIps(unittest.TestCase):
 
     def test_get_public_ips_refreshes_after_ttl(self):
         resolver = Resolver(cache_ttl=1)
-        with patch("main.fetch_ipv4", side_effect=["1.1.1.1", "2.2.2.2"]) as m4, patch(
-            "main.fetch_ipv6", side_effect=["::1", "::2"]
-        ) as m6, patch("main.time.time", side_effect=[100.0, 102.0]):
+        with patch("utils.main.fetch_ipv4", side_effect=["1.1.1.1", "2.2.2.2"]) as m4, patch(
+            "utils.main.fetch_ipv6", side_effect=["::1", "::2"]
+        ) as m6, patch("utils.main.time.time", side_effect=[100.0, 100.0, 102.0, 102.0, 102.0, 102.0]):
             # First fetch at t=100
             self.assertEqual(resolver._get_public_ips(), ("1.1.1.1", "::1"))
             # After TTL at t=102 (cache_time was 100, TTL=1)
@@ -547,12 +596,115 @@ class TestGetPublicIps(unittest.TestCase):
 
     def test_get_public_ips_uses_fallback_when_fetch_returns_empty(self):
         resolver = Resolver(cache_ttl=60)
-        with patch("main.fetch_ipv4", return_value=""), patch(
-            "main.fetch_ipv6", return_value=""
+        with patch("utils.main.fetch_ipv4", return_value=""), patch(
+            "utils.main.fetch_ipv6", return_value=""
         ):
             ipv4, ipv6 = resolver._get_public_ips()
             self.assertEqual(ipv4, "0.0.0.0")
             self.assertEqual(ipv6, "::")
+
+
+class TestCLI(unittest.TestCase):
+    @patch("utils.main.get_current_time", return_value="2026-07-14 17:50:00")
+    @patch("argparse.ArgumentParser.parse_args")
+    def test_cli_current_time(self, mock_parse_args, mock_get_time):
+        import argparse
+        from utils.main import main
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=True, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("2026-07-14 17:50:00")
+
+    @patch("argparse.ArgumentParser.parse_args")
+    def test_cli_utilities(self, mock_parse_args):
+        import argparse
+        from utils.main import main
+
+        # Test cidr
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=24, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with(254)
+
+        # Test mask
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=24, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("255.255.255.0")
+
+        # Test ampm
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm="14:30:00",
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("2:30:00 PM")
+
+        # Test b64 encode
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode="hello", b64_decode=None, upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("aGVsbG8=")
+
+        # Test b64 decode
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode="aGVsbG8=", upper=None, lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("hello")
+
+        # Test upper
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper="hello", lower=None, ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("HELLO")
+
+        # Test lower
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower="HELLO", ip=False, myip=False
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("hello")
+
+        # Test ip
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=True, myip=False
+        )
+        with patch("utils.main.fetch_ipv4", return_value="1.2.3.4"), \
+             patch("utils.main.fetch_ipv6", return_value="2001:db8::2"), \
+             patch("builtins.print") as mock_print:
+            main()
+            mock_print.assert_called_once_with("1.2.3.4\n2001:db8::2")
+
+        # Test myip
+        mock_parse_args.return_value = argparse.Namespace(
+            address="127.0.0.1", ct=False, cidr=None, mask=None, ampm=None,
+            b64_encode=None, b64_decode=None, upper=None, lower=None, ip=False, myip=True
+        )
+        with patch("builtins.print") as mock_print:
+            main()
+            self.assertTrue(mock_print.called)
 
 
 if __name__ == "__main__":

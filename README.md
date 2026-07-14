@@ -11,6 +11,7 @@ A powerful DNS server implementation in Python that provides various utility fun
 ### 2. Time Services
 - **Current Time**: Get the current local time as a formatted string
 - **Time-based IP**: Get a fake IP address based on current seconds
+- **Railway to AM/PM**: Convert 24-hour format time to 12-hour format (e.g., `14:30:00` → `2:30:00 PM`)
 
 ### 3. IP Address Services
 - **Server Public IP**: Retrieve the server's public IPv4 and IPv6 addresses
@@ -23,27 +24,85 @@ A powerful DNS server implementation in Python that provides various utility fun
 ## Installation
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.11+
 - Docker (optional, for containerized deployment)
 
-### Using pip
+### Install as Local Package / CLI Tool
+
+#### Using `uv` (Recommended)
+You can install and run this project globally using `uv` tools:
 ```bash
-pip install dnslib requests
+# Install the tool globally
+uv tool install .
+
+# Or install in editable mode for development
+uv tool install --editable .
+
+# Run the CLI tool from anywhere!
+dnspython
 ```
 
-### Using Docker
+#### Using standard `pip`
 ```bash
-docker-compose up --build
+# Install in editable mode
+pip install -e .
+
+# Or install normally
+pip install .
 ```
 
 ## Usage
 
 ### Starting the Server
+Simply run the installed command-line tool:
+```bash
+dnspython
+```
+Or run the Python wrapper script:
 ```bash
 python main.py
 ```
 
-The server will run on `localhost:20000` and display available query types.
+*Note: The server will automatically bind to an available ephemeral port chosen by the OS to avoid port conflicts. The assigned port and query examples will be displayed on startup.*
+
+### Direct CLI Utilities
+You can execute all utility functionalities directly from the terminal without starting the DNS server by specifying their respective flags:
+
+```bash
+# Print current local time
+dnspython --ct
+
+# Calculate usable IPs for a CIDR prefix (e.g. 24)
+dnspython --cidr 24
+
+# Get subnet mask for a CIDR prefix (e.g. 24)
+dnspython --mask 24
+
+# Convert 24-hour time to AM/PM format
+dnspython --ampm "14:30:00"
+
+# Base64 encode text
+dnspython --b64-encode "hello"
+# or short flag:
+dnspython --b64e "hello"
+
+# Base64 decode text
+dnspython --b64-decode "aGVsbG8="
+# or short flag:
+dnspython --b64d "aGVsbG8="
+
+# Convert text to uppercase
+dnspython --upper "hello"
+
+# Convert text to lowercase
+dnspython --lower "HELLO"
+
+# Get machine's public IPv4 and IPv6 addresses
+dnspython --ip
+
+# Get your local network IP address
+dnspython --myip
+```
 
 ### DNS Query Examples
 
@@ -59,10 +118,14 @@ dig @localhost -p 20000 24.mask.cidr A +short
 #### Time Services
 ```bash
 # Get current time
-dig @localhost -p 20000 time TXT +short
+dig @localhost -p <port> time TXT +short
 
 # Get time-based IP (127.0.0.1-127.0.0.255)
-dig @localhost -p 20000 time A +short
+dig @localhost -p <port> time A +short
+
+# Convert 24-hour time to 12-hour AM/PM format (supports dots or dashes)
+dig @localhost -p <port> ampm.14.30.00 TXT +short
+dig @localhost -p <port> ampm.14-30-00 TXT +short
 ```
 
 #### IP Address Services
@@ -89,12 +152,30 @@ dig @localhost -p 20000 b64.hello TXT +short
 dig @localhost -p 20000 d64.aGVsbG8 TXT +short
 ```
 
+### Using as Python Package
+The `utils` module can be imported and used directly in Python code:
+
+```python
+from utils import convert_railway_to_ampm, get_current_time, encode_base64
+
+# Convert railway time to AM/PM format
+print(convert_railway_to_ampm("14:30:00"))  # Output: 2:30:00 PM
+print(convert_railway_to_ampm("00:00:00"))  # Output: 12:00:00 AM
+
+# Get current time
+print(get_current_time())  # Output: 2026-07-14 14:30:00
+
+# Base64 encode
+print(encode_base64("hello"))  # Output: aGVsbG8=
+```
+
 ## Project Structure
 
 ```
 dnspython/
-├── main.py                  # Main DNS server implementation
+├── main.py                  # CLI wrapper script (backward-compatible)
 ├── utils/
+│   ├── main.py              # Main DNS server entry point and resolver
 │   ├── base64_utils.py      # Base64 encoding/decoding utilities
 │   ├── cidr_utils.py        # CIDR calculation utilities
 │   ├── ip_fetch_utils.py    # Public IP fetching utilities
@@ -103,7 +184,7 @@ dnspython/
 ├── Dockerfile               # Docker configuration
 ├── docker-compose.yml       # Docker Compose configuration
 ├── requirements.txt         # Python dependencies
-└── pyproject.toml           # Python project configuration
+└── pyproject.toml           # Python project configuration (exposes 'dnspython' CLI tool)
 ```
 
 ## Technical Details
@@ -124,10 +205,10 @@ dnspython/
 ## Development
 
 ### Running Tests
-Run the comprehensive unit test suite using python or uv:
+Run the comprehensive unit test suite:
 ```bash
-# Run tests using uv
-uv run python -m unittest tests/test_resolver.py
+# Run tests using uv (installs dev dependencies automatically)
+uv run --extra dev pytest
 
 # Or using standard python
 python -m unittest tests/test_resolver.py

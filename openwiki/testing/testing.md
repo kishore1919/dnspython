@@ -46,7 +46,7 @@ python -m unittest tests.test_resolver.TestIpUtils -v
 | `TestIpUtils` | `utils/ip_utils.py` | IP validation, subnet mask, int↔IP conversion |
 | `TestCidrUtils` | `utils/cidr_utils.py` | Usable IP calculations (incl. /31, /32 edge cases) |
 | `TestBase64Utils` | `utils/base64_utils.py` | Encode/decode, unicode, padding, roundtrip, invalid input |
-| `TestTimeUtils` | `utils/time_utils.py` | Time format, second range |
+| `TestTimeUtils` | `utils/time_utils.py` | Time format, second range, railway→am/pm conversion |
 | `TestIpFetchUtils` | `utils/ip_fetch_utils.py` | Mocked HTTP, fallback chain, error handling |
 
 ### Resolver Integration Tests

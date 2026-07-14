@@ -28,7 +28,4 @@ def subnet_mask_from_prefix(prefix: int) -> str:
 
 def int_to_ip(x: int) -> str:
     """Convert a 32-bit integer to IPv4 string."""
-    try:
-        return str(ipaddress.IPv4Address(x))
-    except (ValueError, ipaddress.AddressValueError):
-        return ".".join(str((x >> i) & 0xFF) for i in (24, 16, 8, 0))
+    return str(ipaddress.IPv4Address(x & 0xFFFFFFFF))
