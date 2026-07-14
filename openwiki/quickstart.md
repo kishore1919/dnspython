@@ -1,77 +1,79 @@
+---
+type: Quickstart
+title: DNS Python Server - Quickstart
+description: Get started with the DNS Python Server - a DNS utility server providing CIDR, time, IP, Base64, and case conversion services via DNS queries.
+timestamp: 2025-07-14T16:45:00Z
+tags: [quickstart, getting-started, dns, dns-server]
+resource: /README.md
+---
+
 # DNS Python Server - Quickstart
 
-Welcome to the DNS Python Server! This repository provides a powerful DNS server implementation in Python that exposes a variety of utility functions through DNS queries. Use it to perform CIDR calculations, retrieve current time, fetch public IP addresses, encode/decode Base64, and more.
-
-## Repository Overview
-
-- **Purpose**: DNS server that answers specialized queries for network utilities
-- **Key Features**:
-  - CIDR calculations (usable IPs, subnet masks)
-  - Time services (current time, time-based IPs)
-  - IP address services (public IP lookup, client IP detection)
-  - Base64 encoding/decoding utilities
-- **Directory Structure**:
-  - `main.py` - Core server implementation and resolver logic
-  - `utils/` - Supporting utility modules:
-    - `base64_utils.py`
-    - `cidr_utils.py`
-    - `ip_fetch_utils.py`
-    - `ip_utils.py`
-    - `time_utils.py`
-  - `tests/` - Test suite for resolver functionality
-  - `docker/` - Docker deployment configuration (Dockerfile, docker-compose.yml)
+A DNS utility server implemented in Python using `dnslib`. It exposes utility functions through standard DNS queries (A, AAAA, TXT records) on port 20000 by default.
 
 ## Quick Start
 
-### Running Locally
+### Run with Python
+```bash
+# Install dependencies
+pip install dnslib requests
 
-1. Install dependencies:
-   ```bash
-   pip install dnslib requests
-   ```
+# Run the server
+python main.py
+```
 
-2. Start the server:
-   ```bash
-   python main.py
-   ```
+### Run with Docker
+```bash
+docker-compose up --build
+```
 
-3. The server will run on `localhost:20000` and respond to DNS queries at that endpoint.
+The server starts on `127.0.0.1:20000` by default. Configure with:
+- `DNS_PORT` (default: `20000`)
+- `DNS_ADDRESS` (default: `127.0.0.1`)
 
-### Using Docker (Recommended)
+## Quick Query Examples
 
-1. Build and run with Docker Compose:
-   ```bash
-   docker-compose up --build
-   ```
+| Query | Record Type | Description |
+|-------|-------------|-------------|
+| `dig @localhost -p 20000 24.cidr TXT` | TXT | Usable IPs in /24 subnet |
+| `dig @localhost -p 20000 24.mask.cidr A` | A | Subnet mask for /24 |
+| `dig @localhost -p 20000 time TXT` | TXT | Current time |
+| `dig @localhost -p 20000 time A` | A | Time-based IP (127.0.0.1-127.0.0.255) |
+| `dig @localhost -p 20000 ip A` | A | Server's public IPv4 |
+| `dig @localhost -p 20000 ip AAAA` | AAAA | Server's public IPv6 |
+| `dig @localhost -p 20000 ip TXT` | TXT | Both IPs as text |
+| `dig @localhost -p 20000 myip A` | A | Your client IP |
+| `dig @localhost -p 20000 b64.hello TXT` | TXT | Base64 encode "hello" |
+| `dig @localhost -p 20000 d64.aGVsbG8 TXT` | TXT | Base64 decode "aGVsbG8" |
+| `dig @localhost -p 20000 lower.hello TXT` | TXT | lowercase → UPPERCASE |
+| `dig @localhost -p 20000 upper.HELLO TXT` | TXT | UPPERCASE → lowercase |
+| `dig @localhost -p 20000 up.hello TXT` | TXT | Echo as UPPERCASE |
 
-2. The server will start automatically and display a startup message.
+## Key Concepts
 
-### Making Queries
+| Concept | Description |
+|---------|-------------|
+| **Rule-based Resolver** | Each query type is handled by a registered `Rule` (matcher + handler) |
+| **QueryContext** | Context object carrying parsed query data through the pipeline |
+| **Caching** | Public IPs cached for 5 minutes (TTL configurable) |
+| **DNS Record Types** | A (IPv4), AAAA (IPv6), TXT (text) |
 
-Use any DNS client (e.g., `dig`) to query the server at `localhost:20000`. Query patterns include:
+## Documentation Structure
 
-- **CIDR Calculations**: 
-  - `dig @localhost -p 20000 24.cidr TXT +short` → usable IPs in /24 subnet
-  - `dig @localhost -p 20000 24.mask.cidr A +short` → subnet mask for /24
+| Page | Description |
+|------|-------------|
+| [Architecture Overview](/openwiki/architecture/overview.md) | High-level architecture, resolver pipeline, rule registry |
+| [Source Map](/openwiki/architecture/source-map.md) | File-by-file source map with key classes/functions |
+| [Features](/openwiki/features/features.md) | Detailed feature reference with query examples |
+| [Operations](/openwiki/operations/operations.md) | Running, logging, config, troubleshooting |
+| [Testing](/openwiki/testing/testing.md) | Test structure, running tests, adding tests |
+| [Deployment](/openwiki/deployment/deployment.md) | Docker, environment variables, production notes |
 
-- **Time Services**:
-  - `dig @localhost -p 20000 time TXT +short` → current time string
-  - `dig @localhost -p 20000 time A +short` → time-based IP
+## Quick Links
 
-- **IP Services**:
-  - `dig @localhost -p 20000 ip A +short` → server's public IPv4
-  - `dig @localhost -p 20000 myip A +short` → client's IP address
-
-- **Base64 Utilities**:
-  - `dig @localhost -p 20000 b64.hello TXT +short` → encodes "hello"
-  - `dig @localhost -p 20000 d64.aGVsbG8 TXT +short` → decodes "hello"
-
-## Next Steps
-
-- Explore the [Architecture Overview](openwiki/architecture/overview.md) for technical details
-- Review [Features](openwiki/features/feature-overview.md) for complete capability list
-- See [Usage Examples](openwiki/usage/usage.md) for more query patterns
-- Check [Deployment Guide](openwiki/deployment/deployment.md) for Docker-specific instructions
-- Learn about [Testing Practices](openwiki/testing/testing.md) for contribution guidelines
-
-Start experimenting with DNS queries to discover the available utilities!
+- **Entry point**: `main.py:main()`
+- **Resolver class**: `main.py:Resolver`
+- **Rule registry**: `Resolver.__init__` → `self.rules`
+- **Utility modules**: `utils/ip_utils.py`, `utils/cidr_utils.py`, `utils/base64_utils.py`, `utils/ip_fetch_utils.py`, `utils/time_utils.py`
+- **Tests**: `tests/test_resolver.py`
+- **Docker**: `Dockerfile`, `docker-compose.yml`
