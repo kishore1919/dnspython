@@ -124,8 +124,8 @@ dig @localhost -p <port> time TXT +short
 dig @localhost -p <port> time A +short
 
 # Convert 24-hour time to 12-hour AM/PM format (supports dots or dashes)
-dig @localhost -p <port> ampm.14.30.00 TXT +short
-dig @localhost -p <port> ampm.14-30-00 TXT +short
+dig @localhost -p <port> ampm.14.30 TXT +short
+dig @localhost -p <port> ampm.14-30 TXT +short
 ```
 
 #### IP Address Services

@@ -70,8 +70,8 @@ All `dig` examples below use `<port>` — replace with the port printed at serve
 | `dig @localhost -p <port> 24.mask.cidr A` | A | Subnet mask for /24 |
 | `dig @localhost -p <port> time TXT` | TXT | Current time (YYYY-MM-DD HH:MM:SS) |
 | `dig @localhost -p <port> time A` | A | Time-based IP (127.0.0.1-127.0.0.255) |
-| `dig @localhost -p <port> ampm.14.30.00 TXT` | TXT | Convert 24h → 12h (2:30:00 PM) |
-| `dig @localhost -p <port> ampm.14-30-00 TXT` | TXT | Convert with dashes |
+| `dig @localhost -p <port> ampm.14.30 TXT` | TXT | Convert 24h → 12h (2:30 PM) |
+| `dig @localhost -p <port> ampm.14-30 TXT` | TXT | Convert with dashes |
 | `dig @localhost -p <port> ip A` | A | Server's public IPv4 |
 | `dig @localhost -p <port> ip AAAA` | AAAA | Server's public IPv6 |
 | `dig @localhost -p <port> ip TXT` | TXT | Both IPs as text |

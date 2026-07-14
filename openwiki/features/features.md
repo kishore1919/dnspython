@@ -59,16 +59,16 @@ dig @localhost -p <port> time A +short
 
 #### Railway Time → AM/PM Conversion (TXT)
 ```
-dig @localhost -p <port> ampm.14.30.00 TXT +short
-# → "2:30:00 PM"
+dig @localhost -p <port> ampm.14.30 TXT +short
+# → "2:30 PM"
 
-dig @localhost -p <port> ampm.14-30-00 TXT +short
-# → "2:30:00 PM"
+dig @localhost -p <port> ampm.14-30 TXT +short
+# → "2:30 PM"
 ```
-- **Pattern**: `ampm.<HH>.<MM>.<SS>` or `ampm.<HH>-<MM>-<SS>`
+- **Pattern**: `ampm.<HH>.<MM>` or `ampm.<HH>-<MM>`
 - **QTYPE**: TXT only
-- **Response**: 12-hour format `H:MM:SS AM/PM` (no leading zero on hour)
-- **Validation**: Invalid times (e.g., 25:00:00, 12:60:00) return error text
+- **Response**: 12-hour format `H:MM AM/PM` (no leading zero on hour)
+- **Validation**: Invalid times (e.g., 25:00, 12:60) return error text
 
 ### 3. IP Address Services
 
@@ -182,16 +182,16 @@ dig @localhost -p <port> up.hello TXT +short
 
 ### 6. Railway Time → AM/PM Conversion (TXT)
 ```
-dig @localhost -p <port> ampm.14.30.00 TXT +short
-# → "2:30:00 PM"
+dig @localhost -p <port> ampm.14.30 TXT +short
+# → "2:30 PM"
 
-dig @localhost -p <port> ampm.14-30-00 TXT +short
-# → "2:30:00 PM"
+dig @localhost -p <port> ampm.14-30 TXT +short
+# → "2:30 PM"
 ```
-- **Pattern**: `ampm.<HH>.<MM>.<SS>` or `ampm.<HH>-<MM>-<SS>`
+- **Pattern**: `ampm.<HH>.<MM>` or `ampm.<HH>-<MM>`
 - **QTYPE**: TXT only
-- **Response**: 12-hour format `H:MM:SS AM/PM` (no leading zero on hour)
-- **Validation**: Invalid times (e.g., 25:00:00, 12:60:00) return error text
+- **Response**: 12-hour format `H:MM AM/PM` (no leading zero on hour)
+- **Validation**: Invalid times (e.g., 25:00, 12:60) return error text
 
 ---
 

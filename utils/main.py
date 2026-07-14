@@ -203,17 +203,17 @@ class Resolver(BaseResolver):
         return self._match_prefix_payload(ctx, self.UPPER_PREFIX)
 
     def _match_time_convert(self, ctx: QueryContext) -> Optional[Dict[str, Any]]:
-        """Match ampm.<HH>.<MM>.<SS> or ampm.<HH>-<MM>-<SS> queries."""
+        """Match ampm.<HH>.<MM> or ampm.<HH>-<MM> queries."""
         if len(ctx.parts) >= 2 and ctx.parts[0] == self.AMPM_PREFIX:
-            # Case 1: ampm.14-30-00
+            # Case 1: ampm.14-30
             if len(ctx.parts) == 2:
                 time_part = ctx.parts[1]
                 if "-" in time_part:
                     time_str = time_part.replace("-", ":")
                     return {"time_str": time_str}
-            # Case 2: ampm.14.30.00
-            elif len(ctx.parts) == 4:
-                time_str = ":".join(ctx.parts[1:4])
+            # Case 2: ampm.14.30
+            elif len(ctx.parts) == 3:
+                time_str = ":".join(ctx.parts[1:3])
                 return {"time_str": time_str}
         return None
 
@@ -351,7 +351,7 @@ def main() -> None:
             "  lower.[text] TXT        -> Convert lowercase to uppercase (echo UPPER)\n"
             "  upper.[text] TXT        -> Convert uppercase to lowercase (echo lower)\n"
             "  up.[text] TXT           -> Uppercase echo\n"
-            "  ampm.[time] TXT         -> Convert 24-hour time (HH.MM.SS or HH-MM-SS) to AM/PM (e.g. ampm.14.30.00)"
+            "  ampm.[time] TXT         -> Convert 24-hour time (HH.MM or HH-MM) to AM/PM (e.g. ampm.14.30)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -379,7 +379,7 @@ def main() -> None:
     parser.add_argument(
         "--ampm",
         type=str,
-        help="Convert railway time (24-hour HH:MM:SS) to AM/PM format"
+        help="Convert railway time (24-hour HH:MM) to AM/PM format"
     )
     parser.add_argument(
         "--b64-encode", "--b64e",
@@ -495,7 +495,7 @@ def main() -> None:
             ("lower.hello TXT", "lowercase -> uppercase 'HELLO'"),
             ("upper.HELLO TXT", "uppercase -> lowercase 'hello'"),
             ("up.hello TXT", "uppercase echo 'HELLO'"),
-            ("ampm.14.30.00 TXT", "convert 24h time to 12h"),
+            ("ampm.14.30 TXT", "convert 24h time to 12h"),
         ]
         logger.info("Supported queries:")
         for query, desc in examples:

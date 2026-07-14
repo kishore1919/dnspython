@@ -123,7 +123,7 @@ if __name__ == '__main__':
 |----------|---------|
 | `get_current_time()` | Formatted local time: `YYYY-MM-DD HH:MM:SS` |
 | `get_current_second()` | Current second (0-59) |
-| `convert_railway_to_ampm(time_str)` | Convert 24-hour railway time to 12-hour am/pm format |
+| `convert_railway_to_ampm(time_str)` | Convert 24-hour railway time to 12-hour am/pm format (HH:MM → H:MM AM/PM) |
 
 ---
 

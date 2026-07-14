@@ -545,21 +545,21 @@ class TestResolverReplies(unittest.TestCase):
 
     def test_reply_time_convert(self):
         # Test matching with dots
-        ctx = _make_ctx("ampm.14.30.00", "TXT")
+        ctx = _make_ctx("ampm.14.30", "TXT")
         matched = self.resolver._match_time_convert(ctx)
-        self.assertEqual(matched, {"time_str": "14:30:00"})
+        self.assertEqual(matched, {"time_str": "14:30"})
         reply = self.resolver._reply_time_convert(ctx, **matched)
-        self.assertEqual(_txt(reply), "2:30:00 PM")
+        self.assertEqual(_txt(reply), "2:30 PM")
 
         # Test matching with dashes
-        ctx = _make_ctx("ampm.14-30-00", "TXT")
+        ctx = _make_ctx("ampm.14-30", "TXT")
         matched = self.resolver._match_time_convert(ctx)
-        self.assertEqual(matched, {"time_str": "14:30:00"})
+        self.assertEqual(matched, {"time_str": "14:30"})
         reply = self.resolver._reply_time_convert(ctx, **matched)
-        self.assertEqual(_txt(reply), "2:30:00 PM")
+        self.assertEqual(_txt(reply), "2:30 PM")
 
         # Test invalid time format error handling
-        ctx = _make_ctx("ampm.99.99.99", "TXT")
+        ctx = _make_ctx("ampm.99.99", "TXT")
         matched = self.resolver._match_time_convert(ctx)
         reply = self.resolver._reply_time_convert(ctx, **matched)
         self.assertIn("Invalid time format", _txt(reply))
